@@ -12,7 +12,7 @@ export interface ClassifiedResult {
   category: MediaCategory;
   url: string;
   snippet: string;
-  source: "bing" | "wechat";
+  source: "baidu" | "wechat";
 }
 
 /**
@@ -26,7 +26,7 @@ export function classifyResults(
     media: string;
     url: string;
     snippet: string;
-    source: "bing" | "wechat";
+    source: "baidu" | "wechat";
   }>
 ): {
   classified: ClassifiedResult[];
