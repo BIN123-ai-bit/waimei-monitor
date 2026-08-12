@@ -10,130 +10,53 @@ export interface WechatArticle {
   snippet: string;
 }
 
-// 全局 cookie 存储（同一进程内复用，减少反爬）
-let _sogouCookies: string | null = null;
-
 /**
  * 通过搜狗微信搜索抓取微信公众号文章
  * @param keyword 搜索关键词
- * @param maxResults 最多返回条数（默认30）
+ * @param maxResults 最多返回条数（默认20）
  */
 export async function searchWechatArticles(
   keyword: string,
-  maxResults: number = 30
+  maxResults: number = 20
 ): Promise<WechatArticle[]> {
   try {
     const encodedQuery = encodeURIComponent(keyword);
-    const allArticles: WechatArticle[] = [];
+    const url = `https://weixin.sogou.com/weixin?type=2&query=${encodedQuery}&ie=utf8`;
 
-    // 搜索第1页和第2页，增加覆盖率
-    for (let page = 1; page <= 2; page++) {
-      if (allArticles.length >= maxResults) break;
-
-      const url = `https://weixin.sogou.com/weixin?type=2&query=${encodedQuery}&ie=utf8&page=${page}`;
-
-      const html = await fetchSogouWithCookie(url);
-      if (!html) break;
-
-      const articles = parseSogouHTML(html);
-      if (articles.length === 0) break;
-
-      allArticles.push(...articles);
-
-      // 页间延迟，避免触发反爬
-      if (page < 2) {
-        await new Promise((r) => setTimeout(r, 800 + Math.random() * 1200));
-      }
-    }
-
-    return allArticles.slice(0, maxResults);
-  } catch (error) {
-    console.error("搜狗微信搜索异常:", error);
-    return [];
-  }
-}
-
-/**
- * 带 Cookie 的搜狗请求（先获取 Cookie，再请求搜索页）
- */
-async function fetchSogouWithCookie(url: string): Promise<string | null> {
-  const userAgents = [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-  ];
-
-  const ua = userAgents[Math.floor(Math.random() * userAgents.length)];
-
-  // 如果没有 cookie，先访问首页获取
-  if (!_sogouCookies) {
-    try {
-      const homeResp = await fetch("https://weixin.sogou.com/", {
-        headers: { "User-Agent": ua, Accept: "text/html" },
-        signal: AbortSignal.timeout(8000),
-        redirect: "follow",
-      });
-      const setCookie = homeResp.headers.get("set-cookie");
-      if (setCookie) {
-        _sogouCookies = setCookie;
-      }
-    } catch {
-      // 获取 cookie 失败不致命
-    }
-  }
-
-  try {
-    const headers: Record<string, string> = {
-      "User-Agent": ua,
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-      Referer: "https://weixin.sogou.com/",
-      "Cache-Control": "no-cache",
-      Pragma: "no-cache",
-    };
-
-    if (_sogouCookies) {
-      headers["Cookie"] = _sogouCookies;
-    }
-
+    // 直接搜索，使用移动端 UA（实测移动端限制更宽松）
     const response = await fetch(url, {
-      headers,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        Referer: "https://weixin.sogou.com/",
+      },
       signal: AbortSignal.timeout(10000),
       redirect: "follow",
     });
 
     if (!response.ok) {
-      console.warn(`搜狗微信搜索返回 ${response.status}`);
-      return null;
-    }
-
-    // 更新 cookie
-    const newCookie = response.headers.get("set-cookie");
-    if (newCookie) {
-      _sogouCookies = newCookie;
+      console.warn(`搜狗微信返回 ${response.status}`);
+      return [];
     }
 
     const html = await response.text();
 
-    // 检查反爬
     if (
       html.includes("请输入验证码") ||
       html.includes("antispider") ||
-      html.includes("302")
+      html.length < 1000
     ) {
-      console.warn("搜狗微信触发验证，已跳过");
-      _sogouCookies = null; // 清除 cookie 下次重试
-      return null;
+      console.warn("搜狗微信被拦截或内容过少");
+      return [];
     }
 
-    if (html.length < 1000) {
-      console.warn("搜狗微信返回内容过少");
-      return null;
-    }
-
-    return html;
-  } catch {
-    return null;
+    const articles = parseSogouHTML(html);
+    return articles.slice(0, maxResults);
+  } catch (error) {
+    console.error("搜狗微信搜索异常:", error);
+    return [];
   }
 }
 

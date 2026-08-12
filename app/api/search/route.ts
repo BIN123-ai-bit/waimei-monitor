@@ -90,14 +90,35 @@ export async function POST(request: NextRequest) {
 
     // 按日期范围过滤
     const dateFiltered = allResults.filter((r) => {
-      if (!r.date) return true; // 无法判断日期的保留
+      if (!r.date) return true;
       return r.date >= dateFrom && r.date <= dateTo;
+    });
+
+    // 内容过滤：排除招聘、纯政府公告、无关内容
+    const contentFiltered = dateFiltered.filter((r) => {
+      const t = r.title + r.snippet;
+      // 排除招聘相关
+      if (/招聘|求职|招人|诚聘|年薪|五险一金|岗位|社招|校招/i.test(t))
+        return false;
+      // 排除纯政府公告/通知（不涉及具体项目）
+      if (
+        /^(关于|关于做好|关于组织|关于征集|关于推荐|关于开展).*(通知|公告)$/.test(
+          r.title
+        )
+      )
+        return false;
+      // 排除招标/中标（过于技术性的招标信息）
+      if (
+        /招标公告|中标候选人公示|中标结果公告|竞争性谈判|询价采购/.test(r.title)
+      )
+        return false;
+      return true;
     });
 
     // ============================================================
     // 4. 去重
     // ============================================================
-    const deduplicated = deduplicate(dateFiltered);
+    const deduplicated = deduplicate(contentFiltered);
 
     // ============================================================
     // 5. 媒体分类（数据库匹配）
