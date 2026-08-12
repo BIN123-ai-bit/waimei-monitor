@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchBaiduNews, expandKeywords } from "@/lib/baidu-search";
+import { searchAllNews, expandKeywords } from "@/lib/multi-search";
 import { searchWechatArticles } from "@/lib/wechat-search";
 import {
   classifyResults,
@@ -57,12 +57,12 @@ export async function POST(request: NextRequest) {
     // ============================================================
     const keywords = expandKeywords(kw);
 
-    // 百度新闻搜索：对每个扩展关键词分别搜索
-    const baiduPromises = keywords.map((k) =>
-      searchBaiduNews(k, daysBack, 30)
+    // 多源新闻搜索：搜狗 + 360 + Bing 并行
+    const newsPromises = keywords.map((k) =>
+      searchAllNews(k, daysBack, 20)
     );
-    const [baiduResults, wechatResults] = await Promise.all([
-      Promise.all(baiduPromises).then((arr) => arr.flat()),
+    const [newsResults, wechatResults] = await Promise.all([
+      Promise.all(newsPromises).then((arr) => arr.flat()),
       searchWechatArticles(kw, 20),
     ]);
 
@@ -70,13 +70,13 @@ export async function POST(request: NextRequest) {
     // 3. 结果合并 + 日期过滤
     // ============================================================
     const allResults = [
-      ...baiduResults.map((r) => ({
+      ...newsResults.map((r) => ({
         date: r.date,
         title: r.title,
         media: r.media,
         url: r.url,
         snippet: r.snippet,
-        source: "baidu" as const,
+        source: "news" as const,
       })),
       ...wechatResults.map((r) => ({
         date: r.date,
@@ -123,13 +123,13 @@ export async function POST(request: NextRequest) {
     // ============================================================
     const byCategory: Record<string, number> = {};
     const byDate: Record<string, number> = {};
-    let baiduCount = 0;
+    let newsCount = 0;
     let wechatCount = 0;
 
     for (const r of finalResults) {
       byCategory[r.category] = (byCategory[r.category] || 0) + 1;
       byDate[r.date] = (byDate[r.date] || 0) + 1;
-      if (r.source === "baidu") baiduCount++;
+      if (r.source === "news") newsCount++;
       else wechatCount++;
     }
 
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
       stats: {
         byCategory,
         byDate,
-        bySource: { baidu: baiduCount, wechat: wechatCount },
+        bySource: { news: newsCount, wechat: wechatCount },
       },
     });
   } catch (error) {

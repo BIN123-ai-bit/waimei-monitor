@@ -31,7 +31,7 @@ export async function generateExcelBuffer(
     媒体类别: categoryLabel(item.category),
     媒体链接: item.url,
     摘要: item.snippet,
-    数据来源: item.source === "baidu" ? "百度新闻" : "微信公众号",
+    数据来源: item.source === "news" ? "多源新闻" : "微信公众号",
   }));
 
   const ws1 = XLSX.utils.json_to_sheet(rows);
@@ -83,9 +83,9 @@ export async function generateExcelBuffer(
     { 项目: "", 内容: "" },
     { 项目: "===== 按数据来源统计 =====", 内容: "" },
     {
-      项目: "百度新闻",
+      项目: "多源新闻",
       内容: String(
-        results.filter((r) => r.source === "baidu").length
+        results.filter((r) => r.source === "news").length
       ),
     },
     {

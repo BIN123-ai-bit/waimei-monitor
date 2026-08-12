@@ -14,7 +14,7 @@ interface SearchResult {
   category: string;
   url: string;
   snippet: string;
-  source: "baidu" | "wechat";
+  source: "news" | "wechat";
 }
 
 interface SearchResponse {
@@ -24,7 +24,7 @@ interface SearchResponse {
   results: SearchResult[];
   stats: {
     byCategory: Record<string, number>;
-    bySource: { baidu: number; wechat: number };
+    bySource: { news: number; wechat: number };
   };
 }
 
@@ -296,7 +296,7 @@ export default function Home() {
 
         {/* 提示 */}
         <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-3">
-          支持搜索企业名称、品牌名、项目名等。搜索结果来自百度新闻 + 微信公众号。
+          支持搜索企业名称、品牌名、项目名等。搜索结果来自多源新闻 + 微信公众号。
         </p>
       </div>
 
@@ -306,7 +306,7 @@ export default function Home() {
           <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
           <p className="text-sm">正在搜索全网媒体发稿…</p>
           <p className="text-xs text-zinc-400">
-            同时查询百度新闻和微信公众号，可能需要 10-30 秒
+            同时查询多源新闻和微信公众号，可能需要 15-30 秒
           </p>
         </div>
       )}
@@ -353,7 +353,7 @@ export default function Home() {
 
             {/* 来源提示 */}
             <div className="text-xs text-zinc-500 mt-2">
-              百度新闻：{data.stats.bySource.baidu} 条 · 微信公众号：
+              多源新闻：{data.stats.bySource.news} 条 · 微信公众号：
               {data.stats.bySource.wechat} 条
             </div>
           </div>
