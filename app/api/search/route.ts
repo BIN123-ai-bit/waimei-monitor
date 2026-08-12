@@ -9,6 +9,7 @@ import {
   type ClassifiedResult,
 } from "@/lib/media-classifier";
 import { deduplicate } from "@/lib/deduplicate";
+import { filterByReportQuality } from "@/lib/report-scorer";
 import { matchProjectKeywords, generateSearchQueries } from "@/data/project-keywords";
 
 // ============================================================
@@ -63,8 +64,8 @@ async function searchOneProject(
       queries: searchQueries,
       filterTerms: aliases,
       daysBack: 365, // 放宽到一年
-      maxPerQuery: 20,
-      maxTotal: 80,
+      maxPerQuery: 25,
+      maxTotal: 100,
     }).catch((err) => {
       console.error(`[新闻搜索失败] ${keyword}:`, err);
       return [];
@@ -139,8 +140,14 @@ async function searchOneProject(
   // 8. 去重
   const deduplicated = deduplicate(precisionFiltered);
 
-  // 9. 媒体分类（数据库 + AI 兜底）
-  const { classified, unknownMedia } = classifyResults(deduplicated);
+  // 9. 报道质量评分过滤（基于1271条真实台账训练）
+  const scored = filterByReportQuality(deduplicated, 15);
+  console.log(
+    `[项目搜索] ${projectName}: 去重=${deduplicated.length} → 报道评分过滤=${scored.length}`
+  );
+
+  // 10. 媒体分类（数据库 + AI 兜底）
+  const { classified, unknownMedia } = classifyResults(scored);
   let finalResults = classified;
   if (unknownMedia.length > 0) {
     const aiResults = await classifyWithAI(unknownMedia).catch(() => new Map());
