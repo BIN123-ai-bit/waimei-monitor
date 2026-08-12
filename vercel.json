@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "app/api/search/route.ts": {
+      "maxDuration": 10
+    }
+  },
+  "env": {
+    "AI_API_KEY": "@ai-api-key"
+  }
+}
