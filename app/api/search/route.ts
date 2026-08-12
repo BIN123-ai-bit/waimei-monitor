@@ -57,13 +57,13 @@ export async function POST(request: NextRequest) {
     // ============================================================
     const keywords = expandKeywords(kw);
 
-    // 多源新闻搜索：搜狗 + 360 + Bing 并行
+    // 多源新闻搜索 + 微信公众号搜索 并行
     const newsPromises = keywords.map((k) =>
-      searchAllNews(k, daysBack, 20)
+      searchAllNews(k, daysBack, 50)
     );
     const [newsResults, wechatResults] = await Promise.all([
       Promise.all(newsPromises).then((arr) => arr.flat()),
-      searchWechatArticles(kw, 20),
+      searchWechatArticles(kw, 30),
     ]);
 
     // ============================================================
