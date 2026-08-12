@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchAllNews, expandKeywords } from "@/lib/multi-search";
-import { searchWechatArticles } from "@/lib/wechat-search";
+import { searchWechatArticles } from "@/lib/tikhub-search";
 import {
   classifyResults,
   classifyWithAI,
