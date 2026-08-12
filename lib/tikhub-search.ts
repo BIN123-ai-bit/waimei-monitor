@@ -1,5 +1,7 @@
 // TikHub 微信搜一搜 API 封装
-// 通过第三方 API 稳定搜索微信公众号文章
+// 接入项目关键词数据库，智能多路搜索
+
+import { generateSearchQueries } from "@/data/project-keywords";
 
 export interface WechatArticle {
   title: string;
@@ -23,15 +25,8 @@ export async function searchWechatArticles(
     return [];
   }
 
-  // 双路搜索
-  const queries: string[] = [keyword];
-  if (
-    /机场|项目|工程|大厦|中心|医院|学校|公路|铁路|桥梁|隧道|场馆|口岸/.test(
-      keyword
-    )
-  ) {
-    queries.push(`${keyword} 进展 竣工 验收`);
-  }
+  // 智能多路搜索：利用项目关键词数据库生成最优查询
+  const queries = generateSearchQueries(keyword);
 
   const allArticles: WechatArticle[] = [];
   const seenUrls = new Set<string>();
@@ -43,8 +38,11 @@ export async function searchWechatArticles(
     )
   );
 
-  // 先合并第二条（项目词）的结果，再补第一条的
-  const combined = [...(resultsPerQuery[1] || []), ...(resultsPerQuery[0] || [])];
+  // 项目关键词结果优先（更精准），原始关键词兜底
+  const [firstQueryResults, ...restResults] = resultsPerQuery;
+  const projectResults = restResults.flat();
+  const rawResults = firstQueryResults || [];
+  const combined = [...projectResults, ...rawResults];
 
   for (const a of combined) {
     if (allArticles.length >= maxResults) break;

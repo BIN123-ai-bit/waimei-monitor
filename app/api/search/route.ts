@@ -57,13 +57,13 @@ export async function POST(request: NextRequest) {
     // ============================================================
     const keywords = expandKeywords(kw);
 
-    // 多源新闻搜索 + 微信公众号搜索 并行
+    // 多源新闻搜索 + 微信公众号搜索 并行（提高数量上限）
     const newsPromises = keywords.map((k) =>
-      searchAllNews(k, daysBack, 50)
+      searchAllNews(k, daysBack, 80)
     );
     const [newsResults, wechatResults] = await Promise.all([
       Promise.all(newsPromises).then((arr) => arr.flat()),
-      searchWechatArticles(kw, 30),
+      searchWechatArticles(kw, 50),
     ]);
 
     // ============================================================
@@ -94,24 +94,25 @@ export async function POST(request: NextRequest) {
       return r.date >= dateFrom && r.date <= dateTo;
     });
 
-    // 内容过滤：排除招聘、纯政府公告、无关内容
+    // 内容过滤：仅过滤明确不相关的内容
     const contentFiltered = dateFiltered.filter((r) => {
       const t = r.title + r.snippet;
-      // 排除招聘相关
-      if (/招聘|求职|招人|诚聘|年薪|五险一金|岗位|社招|校招/i.test(t))
+      // 排除招聘相关（无论来源）
+      if (/招聘|求职|招人|诚聘|年薪|五险一金|岗位|社招|校招/.test(t))
         return false;
-      // 排除纯政府公告/通知（不涉及具体项目）
-      if (
-        /^(关于|关于做好|关于组织|关于征集|关于推荐|关于开展).*(通知|公告)$/.test(
-          r.title
+      // 对新闻源额外过滤政府公告和招标（微信源已通过关键词精准匹配，不过滤）
+      if (r.source === "news") {
+        if (
+          /^(关于|关于做好|关于组织|关于征集|关于推荐|关于开展).*(通知|公告)$/.test(
+            r.title
+          )
         )
-      )
-        return false;
-      // 排除招标/中标（过于技术性的招标信息）
-      if (
-        /招标公告|中标候选人公示|中标结果公告|竞争性谈判|询价采购/.test(r.title)
-      )
-        return false;
+          return false;
+        if (
+          /招标公告|中标候选人公示|中标结果公告|竞争性谈判|询价采购/.test(r.title)
+        )
+          return false;
+      }
       return true;
     });
 
