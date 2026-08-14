@@ -4,6 +4,13 @@
 
 ---
 
+## 🌐 线上版本（国内可直接访问）
+
+**https://waimei-monitor.netlify.app**
+
+- 更新线上版本：双击 `部署到Netlify.command`，等待完成即可
+- （旧 Vercel 地址国内无法访问，已弃用）
+
 ## 🚀 快速开始
 
 ### 前提准备（只需一次）

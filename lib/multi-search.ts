@@ -124,7 +124,8 @@ async function searchBaidu(
   maxResults: number
 ): Promise<NewsResult[]> {
   try {
-    const results = await searchBaiduNews(keyword, 90, maxResults);
+    // 百度新闻时间窗口放宽到一年（原来只有 90 天，搜不到历史报道）
+    const results = await searchBaiduNews(keyword, 365, maxResults);
     return results.map((r: BaiduNewsResult) => ({
       title: r.title,
       url: r.url,
@@ -244,62 +245,9 @@ function mergeResults(
 }
 
 // ============================================================
-// 内容精度过滤
-// ============================================================
-
-/**
- * 过滤噪音内容（招聘、招标、纯通知等）
- */
-function filterNoise(results: NewsResult[]): NewsResult[] {
-  return results.filter((r) => {
-    const t = r.title + r.snippet;
-
-    // 招聘/求职
-    if (/招聘|求职|招人|诚聘|年薪|五险一金|岗位|社招|校招|实习|管培生/.test(t))
-      return false;
-
-    // 招标/中标公告
-    if (/招标公告|中标候选人|中标公示|招标文件|采购公告|询价公告|竞争性磋商/.test(t))
-      return false;
-
-    // 纯通知
-    if (/^(关于|关于做好|关于组织).*(通知|公告)$/.test(r.title))
-      return false;
-
-    // 股票/基金
-    if (/股票|基金净值|A股|港股|涨停|跌停|收盘|开盘/.test(t))
-      return false;
-
-    // 广告
-    if (/广告|推广|促销|优惠|打折|免费领取/.test(t))
-      return false;
-
-    return true;
-  });
-}
-
-/**
- * 精度过滤：结果必须与搜索词有一定相关性
- * @param results 搜索结果
- * @param searchTerms 用于匹配的搜索词列表（项目名+别名）
- * @param minTerms 最少匹配几个搜索词（默认1）
- */
-function precisionFilter(
-  results: NewsResult[],
-  searchTerms: string[],
-  minTerms: number = 1
-): NewsResult[] {
-  if (searchTerms.length === 0) return results;
-
-  return results.filter((r) => {
-    const text = r.title + r.snippet;
-    const matchCount = searchTerms.filter((term) => text.includes(term)).length;
-    return matchCount >= minTerms;
-  });
-}
-
-// ============================================================
 // 主入口：双引擎并行搜索
+// （内容过滤统一在 API 层 app/api/search/route.ts 进行，
+//   以便把被过滤的内容连同原因一起返回给用户展示）
 // ============================================================
 
 export interface SearchOptions {
@@ -332,25 +280,24 @@ export async function searchAllNews(options: SearchOptions): Promise<NewsResult[
   console.log(`[多源搜索] 查询词: ${topQueries.join(", ")}`);
 
   // ============================================================
-  // 并行搜索：每个查询词 → 同时搜 Google + 百度
+  // 并行搜索：所有查询词同时搜索（每个查询词内 Google + 百度并行）
+  // 缩短整体耗时，避免批量搜索时接口超时
   // ============================================================
-  const allResults: NewsResult[] = [];
+  const queryResults = await Promise.all(
+    topQueries.map(async (query) => {
+      const [googleResults, baiduResults] = await Promise.all([
+        searchGoogleNews(query, maxPerQuery).catch(() => [] as NewsResult[]),
+        searchBaidu(query, maxPerQuery).catch(() => [] as NewsResult[]),
+      ]);
 
-  for (const query of topQueries) {
-    // Google 和百度并行
-    const [googleResults, baiduResults] = await Promise.all([
-      searchGoogleNews(query, maxPerQuery).catch(() => [] as NewsResult[]),
-      searchBaidu(query, maxPerQuery).catch(() => [] as NewsResult[]),
-    ]);
-
-    // 合并去重
-    const merged = mergeResults(googleResults, baiduResults);
-    console.log(
-      `[多源搜索] "${query}": Google=${googleResults.length}, 百度=${baiduResults.length}, 合并=${merged.length}`
-    );
-
-    allResults.push(...merged);
-  }
+      const merged = mergeResults(googleResults, baiduResults);
+      console.log(
+        `[多源搜索] "${query}": Google=${googleResults.length}, 百度=${baiduResults.length}, 合并=${merged.length}`
+      );
+      return merged;
+    })
+  );
+  const allResults = queryResults.flat();
 
   // ============================================================
   // 全局去重
@@ -359,18 +306,9 @@ export async function searchAllNews(options: SearchOptions): Promise<NewsResult[
   console.log(`[多源搜索] 全局去重: ${allResults.length} → ${globalDeduped.length}`);
 
   // ============================================================
-  // 噪音过滤
+  // 返回（所有过滤统一在 API 层进行，便于把被过滤内容返回给用户展示）
   // ============================================================
-  const cleaned = filterNoise(globalDeduped);
-  console.log(`[多源搜索] 噪音过滤: ${globalDeduped.length} → ${cleaned.length}`);
-
-  // ============================================================
-  // 精度过滤
-  // ============================================================
-  const precise = precisionFilter(cleaned, filterTerms, 1);
-  console.log(`[多源搜索] 精度过滤: ${cleaned.length} → ${precise.length}`);
-
-  return precise.slice(0, maxTotal);
+  return globalDeduped.slice(0, maxTotal);
 }
 
 /**

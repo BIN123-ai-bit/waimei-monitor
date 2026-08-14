@@ -249,25 +249,27 @@ function normalizeRelativeDate(dateStr: string): string {
 
   const now = new Date();
 
+  // "今天" / "昨天" / "前天"
+  if (dateStr.includes("今天")) return toDateStr(now);
+  if (dateStr.includes("昨天")) return toDateStr(new Date(now.getTime() - 86400000));
+  if (dateStr.includes("前天")) return toDateStr(new Date(now.getTime() - 2 * 86400000));
+
   // "5天前"
   let m = dateStr.match(/(\d+)\s*天前/);
   if (m) {
-    const d = new Date(now.getTime() - parseInt(m[1]) * 86400000);
-    return d.toISOString().split("T")[0];
+    return toDateStr(new Date(now.getTime() - parseInt(m[1]) * 86400000));
   }
 
   // "3小时前"
   m = dateStr.match(/(\d+)\s*小时前/);
   if (m) {
-    const d = new Date(now.getTime() - parseInt(m[1]) * 3600000);
-    return d.toISOString().split("T")[0];
+    return toDateStr(new Date(now.getTime() - parseInt(m[1]) * 3600000));
   }
 
   // "10分钟前"
   m = dateStr.match(/(\d+)\s*分钟前/);
   if (m) {
-    const d = new Date(now.getTime() - parseInt(m[1]) * 60000);
-    return d.toISOString().split("T")[0];
+    return toDateStr(new Date(now.getTime() - parseInt(m[1]) * 60000));
   }
 
   // "8月12日" → 当年
@@ -283,6 +285,10 @@ function normalizeRelativeDate(dateStr: string): string {
   }
 
   return dateStr;
+}
+
+function toDateStr(d: Date): string {
+  return d.toISOString().split("T")[0];
 }
 
 /**

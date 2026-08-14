@@ -210,6 +210,10 @@ export function sortByCategory(a: ClassifiedResult, b: ClassifiedResult): number
   const orderB = CATEGORY_SORT_ORDER[b.category] ?? 99;
   if (orderA !== orderB) return orderA - orderB;
 
-  // 同类别按日期倒序
+  // 同类别：先按报道评分降序（质量高的在前），再按日期倒序
+  const scoreA = (a as unknown as { score?: number }).score ?? 0;
+  const scoreB = (b as unknown as { score?: number }).score ?? 0;
+  if (scoreA !== scoreB) return scoreB - scoreA;
+
   return b.date.localeCompare(a.date);
 }

@@ -43,3 +43,6 @@ next-env.d.ts
 recovery-codes.txt
 *.xlsx
 *.xlsx
+
+# Local Netlify folder
+.netlify

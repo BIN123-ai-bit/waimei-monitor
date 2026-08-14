@@ -1,22 +1,102 @@
 // 中建八局西北公司内蒙古分公司 — 项目关键词数据库
-// 基于 2023-2025 年度宣传台账（1774条记录）实际数据提取
-// 所有名称均为台账中实际出现过的表述
+// 数据来源：
+//   1. 《样表：中建八局西北公司【关键词】(内蒙古分公司)》— 公司提供的在建/竣工项目清单
+//   2. 2023-2025 年度宣传台账（1774条记录）实际出现的项目表述
+//   3. 用户补充的具体工程项目名（如蒙牛5G数字工厂大低温版块）
 
 export interface ProjectKeyword {
   primary: string;
   aliases: string[];
+  /** 必须命中词：文章标题/内容里出现这些词才算有效报道（精确匹配规则） */
+  terms: string[];
   type: string;
   years: string[];
 }
 
 // ============================================================
-// 核心项目列表（按台账中出现频率排序，仅包含实际出现的名称）
+// 公司级搜索词（用于扩展搜索查询，不作为命中条件）
+// ============================================================
+
+export const COMPANY_KEYWORDS = [
+  "中建八局西北公司",
+  "西北公司",
+  "中建八局西北建设有限公司",
+  "中建八局（甘肃）建设有限公司",
+];
+
+// ============================================================
+// 核心项目列表
 // ============================================================
 
 export const PROJECT_KEYWORDS: ProjectKeyword[] = [
+  // ========== 样表项目 ==========
   {
-    // 台账中出现 500+ 次，最高频项目
-    // 2023-2024称"呼和浩特新机场"，2024年命名获批后称"呼和浩特盛乐国际机场"
+    // 样表 1
+    primary: "内蒙古工业大学项目",
+    aliases: [
+      "内蒙古工业大学金川校区学生公寓、餐饮服务中心项目",
+      "内蒙古工业大学金川校区",
+      "金川校区学生公寓",
+      "内蒙古工业大学",
+    ],
+    terms: [
+      "内蒙古工业大学金川校区",
+      "金川校区学生公寓",
+      "金川校区餐饮服务中心",
+      "内蒙古工业大学金川校区学生公寓",
+    ],
+    type: "学校",
+    years: ["2026"],
+  },
+  {
+    // 样表 2
+    primary: "文化客厅",
+    aliases: [
+      "呼和浩特文化客厅建设项目",
+      "呼和浩特文化客厅",
+      "文化客厅建设项目",
+    ],
+    terms: [
+      "呼和浩特文化客厅",
+      "文化客厅建设项目",
+    ],
+    type: "场馆",
+    years: ["2026"],
+  },
+  {
+    // 样表 3
+    primary: "文物库房信息化工程",
+    aliases: [
+      "内蒙古文物藏品库房信息化系统集成及零星改造工程",
+      "内蒙古文物藏品库房",
+      "文物库房信息化",
+    ],
+    terms: [
+      "内蒙古文物藏品库房",
+      "文物库房信息化",
+      "文物藏品库房信息化",
+    ],
+    type: "场馆",
+    years: ["2026"],
+  },
+  {
+    // 样表 4
+    primary: "内蒙工大维修改造项目",
+    aliases: [
+      "内蒙古工业大学新城校区文体馆维修改造工程",
+      "内蒙古工业大学新城校区",
+      "文体馆维修改造",
+    ],
+    terms: [
+      "内蒙古工业大学新城校区",
+      "文体馆维修改造",
+      "新城校区文体馆",
+    ],
+    type: "学校",
+    years: ["2026"],
+  },
+  {
+    // 样表 5-10 + 台账高频项目（合并为机场项目组）
     primary: "呼和浩特盛乐国际机场",
     aliases: [
       "呼和浩特新机场",
@@ -27,76 +107,139 @@ export const PROJECT_KEYWORDS: ProjectKeyword[] = [
       "呼和浩特新机场航站区",
       "呼和浩特新机场航站楼",
       "呼和浩特新机场项目",
+      // 样表：机场具体工程
+      "呼和浩特新机场配套建设项目旅客过夜用房工程",
+      "呼和浩特新机场国航机务维修基地工程施工总承包",
+      "新开发银行贷款呼和浩特新机场航站区第一标段施工总承包项目",
+      "新开发银行贷款呼和浩特新机场航站区第二标段",
+      "呼和浩特新机场航站楼指廊建设工程施工总承包",
+      "呼和浩特新机场工作区工程施工总承包一标段",
+    ],
+    terms: [
+      "呼和浩特盛乐国际机场",
+      "盛乐国际机场",
+      "呼和浩特新机场",
+      "新机场航站区",
+      "旅客过夜用房",
+      "国航机务维修基地",
+      "机务维修基地",
+      "航站区第一标段",
+      "航站区第二标段",
+      "航站楼指廊",
+      "指廊建设工程",
+      "新机场工作区",
+      "工作区一标段",
+      "工作区工程施工",
+      "机场航空口岸",
+      "新机场配套建设",
     ],
     type: "机场建设",
     years: ["2023", "2024", "2025", "2026"],
   },
   {
-    // 台账中"蒙牛"出现84次
+    // 样表 11 + 台账项目
+    primary: "呼和浩特万象城",
+    aliases: [
+      "呼和浩特万象城商业总承包工程",
+      "万象城",
+      "呼市万象城",
+    ],
+    terms: [
+      "呼和浩特万象城",
+      "呼市万象城",
+      "万象城商业总承包",
+    ],
+    type: "商业综合体",
+    years: ["2025", "2026"],
+  },
+  // ========== 原12项目（保留） ==========
+  {
+    // 蒙牛：只匹配具体工程名，宽泛的"蒙牛"不算
     primary: "蒙牛乳业",
     aliases: [
-      "蒙牛",
-      "蒙牛集团",
-      "蒙牛产业园",
+      "蒙牛乳业5G数字工厂大低温版块项目",
+      "蒙牛5G数字工厂",
+      "蒙牛乳业大低温版块",
       "蒙牛乳业产业园",
-      "蒙牛工厂",
-      "蒙牛项目",
+      "蒙牛产业园",
+      "蒙牛乳业宁夏工厂",
+      "蒙牛宁夏工厂",
+      "蒙牛全数智化工厂",
+    ],
+    terms: [
+      "蒙牛乳业5G数字工厂",
+      "蒙牛5G数字工厂",
+      "5G数字工厂大低温版块",
+      "蒙牛乳业大低温版块",
+      "大低温版块",
+      "蒙牛乳业产业园",
+      "蒙牛产业园",
+      "蒙牛乳业宁夏工厂",
+      "蒙牛宁夏工厂",
+      "蒙牛全数智化工厂",
+      "蒙牛数智化工厂",
+      "蒙牛超级工厂",
     ],
     type: "产业园区",
-    years: ["2023", "2024", "2025"],
+    years: ["2023", "2024", "2025", "2026"],
   },
   {
-    // 台账中"博物院"出现63次
     primary: "内蒙古博物院",
     aliases: [
-      "博物院",
       "内蒙古博物院新址",
       "内蒙古博物馆",
+      "博物院新馆",
+    ],
+    terms: [
+      "内蒙古博物院",
+      "内蒙古博物院新址",
       "博物院新馆",
     ],
     type: "文化场馆",
     years: ["2024", "2025", "2026"],
   },
   {
-    // 台账中"万象城"出现49次
-    primary: "呼和浩特万象城",
-    aliases: ["万象城", "呼和浩特万象城", "呼市万象城"],
-    type: "商业综合体",
-    years: ["2025"],
-  },
-  {
-    // 台账中"数据中心"38次，"乌兰察布"38次，"银保信"34次
     primary: "中国银保信乌兰察布数据中心",
     aliases: [
       "乌兰察布数据中心",
       "银保信数据中心",
       "中银保信乌兰察布数据中心",
       "银保信乌兰察布",
-      "乌兰察布数据",
       "银保信项目",
+    ],
+    terms: [
+      "中国银保信乌兰察布数据中心",
+      "乌兰察布数据中心",
+      "银保信数据中心",
+      "银保信乌兰察布",
     ],
     type: "数据中心",
     years: ["2023", "2024", "2025"],
   },
   {
-    // 台账中"大黑河"20次，"军事公园"8次
     primary: "大黑河军事公园",
     aliases: [
-      "大黑河",
-      "军事公园",
       "大黑河军事主题公园",
       "大黑河项目",
+    ],
+    terms: [
+      "大黑河军事公园",
+      "大黑河军事主题公园",
+      "大黑河军事",
     ],
     type: "文旅项目",
     years: ["2023"],
   },
   {
-    // 台账中"冰雪节"3次（2023年初），但欢乐冰雪节是独立项目
     primary: "呼和浩特欢乐冰雪节",
     aliases: [
-      "欢乐冰雪节",
       "呼和浩特冰雪节",
-      "冰雪节",
+      "大黑河冰雪节",
+      "大黑河军事公园冰雪节",
+    ],
+    terms: [
+      "呼和浩特欢乐冰雪节",
+      "呼和浩特冰雪节",
       "大黑河冰雪节",
       "大黑河军事公园冰雪节",
     ],
@@ -104,37 +247,55 @@ export const PROJECT_KEYWORDS: ProjectKeyword[] = [
     years: ["2023", "2024", "2025"],
   },
   {
-    // 台账中"中学"25次，"一中"高频
     primary: "呼和浩特市第一中学",
-    aliases: ["呼和浩特一中", "一中", "一中新校区", "呼市一中"],
+    aliases: ["呼和浩特一中", "呼市一中", "一中新校区"],
+    terms: [
+      "呼和浩特市第一中学",
+      "呼和浩特一中",
+      "呼市一中",
+      "一中新校区",
+    ],
     type: "学校",
     years: ["2024", "2025"],
   },
   {
     primary: "伊利现代智慧健康谷",
-    aliases: ["伊利健康谷", "伊利智慧谷", "伊利", "伊利项目"],
+    aliases: ["伊利健康谷", "伊利智慧谷", "伊利现代智慧健康谷项目"],
+    terms: [
+      "伊利现代智慧健康谷",
+      "伊利健康谷",
+      "伊利智慧谷",
+    ],
     type: "产业园区",
     years: ["2023", "2024", "2025"],
   },
   {
     primary: "呼和浩特市妇幼保健院",
-    aliases: ["妇幼保健院", "呼市妇幼", "呼和浩特妇幼"],
+    aliases: ["呼市妇幼", "呼和浩特妇幼"],
+    terms: [
+      "呼和浩特市妇幼保健院",
+      "呼市妇幼",
+      "呼和浩特妇幼",
+    ],
     type: "医院",
     years: ["2024", "2025"],
   },
   {
     primary: "内蒙古电力生产调度中心",
-    aliases: ["电力调度中心", "内蒙古电力", "电力调度"],
+    aliases: ["电力调度中心", "内蒙古电力"],
+    terms: [
+      "内蒙古电力生产调度中心",
+      "电力调度中心",
+    ],
     type: "办公建筑",
     years: ["2024", "2025"],
   },
   {
     primary: "中国移动呼和浩特数据中心",
-    aliases: [
-      "中国移动数据中心",
+    aliases: ["移动呼和浩特数据中心", "移动项目"],
+    terms: [
+      "中国移动呼和浩特数据中心",
       "移动呼和浩特数据中心",
-      "移动数据中心",
-      "移动项目",
     ],
     type: "数据中心",
     years: ["2024", "2025"],
@@ -169,7 +330,9 @@ export const NEWS_KEYWORDS = [
 ];
 
 // ============================================================
-// 模板匹配
+// 项目匹配（用户输入 → 项目）
+// 严格匹配：输入必须与项目名/别名/命中词【完全一致】才映射到项目，
+// 其余情况一律按用户输入的名称直接搜索（不做模糊锁定）
 // ============================================================
 
 export function matchProjectKeywords(
@@ -180,53 +343,13 @@ export function matchProjectKeywords(
 
   for (const pk of PROJECT_KEYWORDS) {
     let score = 0;
-
-    // 1. 项目名包含用户输入（反向匹配 — 用户搜简称）
-    if (pk.primary.includes(input)) {
-      score += 15;
+    if (input === pk.primary) {
+      score = 100;
+    } else if (pk.aliases.some((a) => a === input)) {
+      score = 90;
+    } else if (pk.terms.some((t) => t === input)) {
+      score = 80;
     }
-
-    // 2. 用户输入包含项目名（正向匹配 — 用户搜全称+其他词）
-    if (input.includes(pk.primary)) {
-      score += 12;
-    }
-
-    // 3. 别名反向匹配
-    for (const alias of pk.aliases) {
-      if (alias.includes(input)) {
-        score += 10;
-        break;
-      }
-    }
-
-    // 4. 别名正向匹配
-    for (const alias of pk.aliases) {
-      if (input.includes(alias)) {
-        score += 8;
-        break;
-      }
-    }
-
-    // 5. 2字碎片匹配
-    const fragments = extractFragments(input, 2);
-    const primaryFrags = extractFragments(pk.primary, 2);
-    for (const f of fragments) {
-      if (primaryFrags.has(f)) {
-        score += 3;
-      }
-    }
-
-    // 6. 别名碎片匹配
-    for (const alias of pk.aliases) {
-      const aliasFrags = extractFragments(alias, 2);
-      for (const f of fragments) {
-        if (aliasFrags.has(f)) {
-          score += 2;
-          break;
-        }
-      }
-    }
-
     if (score > 0) {
       results.push({ matched: pk, score });
     }
@@ -236,12 +359,49 @@ export function matchProjectKeywords(
   return results;
 }
 
-function extractFragments(text: string, n: number): Set<string> {
-  const fragments = new Set<string>();
-  for (let i = 0; i <= text.length - n; i++) {
-    fragments.add(text.slice(i, i + n));
+// ============================================================
+// 字面搜索变体生成
+// 用户输入的名称常有全称/简称差异，生成多个变体用于匹配和搜索
+// 例："青海省国家区域医疗中心项目" →
+//   "青海省国家区域医疗中心"（去"项目"）
+//   "青海国家区域医疗中心"（去"省"）
+// ============================================================
+
+export function generateLiteralVariants(input: string): string[] {
+  const variants = new Set<string>([input]);
+  let core = input;
+
+  // 去掉常见结尾词（项目/工程/建设等）
+  core = core.replace(/(工程|项目|建设项目|工程总承包|施工总承包|项目工程)+$/, "");
+  if (core && core !== input) {
+    variants.add(core);
+    variants.add(core + "项目");
+    variants.add(core + "工程");
   }
-  return fragments;
+
+  // 去掉"省"字（"青海省"→"青海"），仅保留长度足够的变体避免误匹配
+  const noProvince = core.replace(/省/g, "");
+  if (noProvince !== core && noProvince.length >= 6) {
+    variants.add(noProvince);
+  }
+
+  return [...variants];
+}
+
+/**
+ * 区域共现匹配：把"XX省+主体词"拆成两部分，
+ * 文章同时提到两部分就算命中（处理"国家区域医疗中心落地青海"这类表述）
+ * 例："青海省国家区域医疗中心项目" → ["青海", "国家区域医疗中心"]
+ */
+export function buildLiteralCoOccur(input: string): string[] | null {
+  const m = input.match(/^(.{2,4}?省)(.+)$/);
+  if (!m) return null;
+
+  const region = m[1].replace(/省$/, ""); // "青海"
+  let core = m[2].replace(/(工程|项目|建设项目|工程总承包|施工总承包|项目工程)+$/, "");
+  if (!core || core.length < 5) return null;
+
+  return [region, core];
 }
 
 // ============================================================
@@ -256,21 +416,27 @@ export function generateSearchQueries(userInput: string): string[] {
   if (matched.length > 0) {
     const best = matched[0].matched;
 
-    // 1. 主名称（最精准）
+    // 1. 必须命中词里最具体的（全称类）优先
+    for (const term of best.terms.slice(0, 4)) {
+      if (term.length >= 6) {
+        queries.push(term);
+      }
+    }
+
+    // 2. 主名称
     queries.push(best.primary);
 
-    // 2. 按重要性取前5个别名
-    const topAliases = best.aliases.slice(0, 5);
-    for (const alias of topAliases) {
+    // 3. 别名（取前4个）
+    for (const alias of best.aliases.slice(0, 4)) {
       queries.push(alias);
     }
 
-    // 3. 主名称 + 新闻关键词
+    // 4. 主名称 + 新闻关键词
     queries.push(`${best.primary} ${NEWS_KEYWORDS.slice(0, 3).join(" ")}`);
 
-    // 4. 第一个别名 + 新闻关键词
-    if (topAliases.length > 0) {
-      queries.push(`${topAliases[0]} ${NEWS_KEYWORDS.slice(0, 2).join(" ")}`);
+    // 5. 公司名 + 项目名（通用简称类项目借助公司名提高精度）
+    if (best.primary.length <= 6) {
+      queries.push(`中建八局 ${best.primary}`);
     }
   }
 
@@ -279,5 +445,5 @@ export function generateSearchQueries(userInput: string): string[] {
     queries.push(userInput.trim());
   }
 
-  return queries.slice(0, 8); // 最多8个查询
+  return [...new Set(queries)].slice(0, 8); // 去重，最多8个查询
 }
