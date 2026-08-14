@@ -86,8 +86,7 @@ export async function classifyWithAI(
 - "中央级"：新华社、光明日报、经济日报、中国青年报、解放军报等国家级媒体
 - "省部级"：省级党报、直辖市报纸、部委主管媒体、主流商业网站（新浪、搜狐、网易、腾讯、凤凰等）
 - "地方"：地市级及以下报纸、县级融媒体中心
-- "行业"：建筑、工程、交通、能源等行业专业媒体
-- "微信公众号"：微信公众号
+- "行业"：建筑、工程、交通、能源等行业专业媒体（微信公众号一律归入"行业"，不要输出"微信公众号"类别）
 
 请对以下媒体逐一分类，只返回 JSON 格式：{"媒体名称": "类别", ...}
 
@@ -144,10 +143,11 @@ ${uniqueMedia.map((m, i) => `${i + 1}. ${m}`).join("\n")}
           "省部级",
           "地方",
           "行业",
-          "微信公众号",
           "未分类",
         ];
-        const cat = category as string;
+        // 用户口径：分类为"微信公众号"的，统一划归为"行业"类别
+        const cat =
+          (category as string) === "微信公众号" ? "行业" : (category as string);
         if (validCategories.includes(cat as MediaCategory)) {
           result.set(media, cat as MediaCategory);
         } else {
