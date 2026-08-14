@@ -6,6 +6,7 @@ import {
   classifyWithAI,
   applyAIClassifications,
   sortByCategory,
+  isSelfMediaPlatform,
   type ClassifiedResult,
 } from "@/lib/media-classifier";
 import { deduplicate } from "@/lib/deduplicate";
@@ -323,9 +324,11 @@ async function searchOneProject(
     return !isSelfMedia;
   });
 
-  // 6. 内容噪音过滤
+  // 6. 内容噪音过滤 + 自媒体平台过滤（用户口径：规避个人发文账号）
   const contentFiltered = selfMediaFiltered.filter((r) => {
-    const reason = findNoiseReason(r.title, r.snippet);
+    const reason =
+      findNoiseReason(r.title, r.snippet) ||
+      (isSelfMediaPlatform(r.media, r.url) ? "自媒体账号" : null);
     if (reason) pushFiltered(r, reason);
     return !reason;
   });
@@ -372,6 +375,11 @@ async function searchOneProject(
     const aiResults = await classifyWithAI(unknownMedia).catch(() => new Map());
     finalResults = applyAIClassifications(classified, aiResults);
   }
+
+  // 10.5 AI 识别为个人账号的，排除（用户口径：规避个人发文账号）
+  const personalAccounts = finalResults.filter((r) => r.category === "个人账号");
+  finalResults = finalResults.filter((r) => r.category !== "个人账号");
+  for (const r of personalAccounts) pushFiltered(r, "个人账号");
 
   finalResults.sort(sortByCategory);
 

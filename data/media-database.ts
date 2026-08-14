@@ -9,6 +9,7 @@ export type MediaCategory =
   | "省部级"
   | "地方"
   | "行业"
+  | "个人账号"
   | "微信公众号"
   | "未分类";
 

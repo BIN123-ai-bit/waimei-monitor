@@ -1109,6 +1109,8 @@ const REASON_COLORS: Record<string, string> = {
   报道评分不足: "bg-orange-50 text-orange-700 border-orange-200",
   自身发布内容: "bg-teal-50 text-teal-700 border-teal-200",
   专利公告: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  个人账号: "bg-rose-50 text-rose-700 border-rose-200",
+  自媒体账号: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
 };
 
 function ReasonBadge({ reason }: { reason: string }) {

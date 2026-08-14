@@ -138,6 +138,7 @@ function categoryLabel(category: MediaCategory): string {
     省部级: "省部级",
     地方: "地方",
     行业: "行业",
+    个人账号: "个人账号",
     微信公众号: "微信公众号",
     未分类: "未分类",
   };

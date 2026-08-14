@@ -15,6 +15,26 @@ export interface ClassifiedResult {
   source: "news" | "wechat";
 }
 
+// ============================================================
+// 自媒体平台检测
+// 用户口径：个人发文账号不算正规外媒发稿，需要规避。
+// 通过媒体名（百家号/头条号等）或链接特征（平台域名）识别
+// ============================================================
+
+const SELF_MEDIA_NAME_RE =
+  /百家号|头条号|网易号|搜狐号|企鹅号|大鱼号|一点号|大风号|快传号|看点快报|360快传|新浪看点|趣头条|东方号|澎湃号/;
+
+const SELF_MEDIA_URL_RE =
+  /baijiahao\.baidu\.com|163\.com\/dy|sohu\.com\/a\/|toutiao\.com|ixigua\.com|yidianzixun\.com|om\.qq\.com|kuaibao\.qq\.com|k\.sina\.com\.cn|kan\.sina\.com\.cn|360kuaichuan\.com|itouchtv\.cn/;
+
+/**
+ * 判断媒体名/链接是否属于个人自媒体发文平台
+ * @returns true = 是自媒体平台内容，应过滤
+ */
+export function isSelfMediaPlatform(media: string, url: string): boolean {
+  return SELF_MEDIA_NAME_RE.test(media) || SELF_MEDIA_URL_RE.test(url);
+}
+
 /**
  * 用数据库对结果进行分类
  * 返回已分类的结果 + 未分类的媒体列表
@@ -87,6 +107,7 @@ export async function classifyWithAI(
 - "省部级"：省级党报、直辖市报纸、部委主管媒体、主流商业网站（新浪、搜狐、网易、腾讯、凤凰等）
 - "地方"：地市级及以下报纸、县级融媒体中心
 - "行业"：建筑、工程、交通、能源等行业专业媒体（微信公众号一律归入"行业"，不要输出"微信公众号"类别）
+- "个人账号"：名称明显是个人自媒体的，如含人名/昵称、个人工作室、"XX说/XX看/XX聊/XX哥/XX姐"、个人观点类账号，归入"个人账号"
 
 请对以下媒体逐一分类，只返回 JSON 格式：{"媒体名称": "类别", ...}
 
@@ -143,6 +164,7 @@ ${uniqueMedia.map((m, i) => `${i + 1}. ${m}`).join("\n")}
           "省部级",
           "地方",
           "行业",
+          "个人账号",
           "未分类",
         ];
         // 用户口径：分类为"微信公众号"的，统一划归为"行业"类别
@@ -201,8 +223,9 @@ const CATEGORY_SORT_ORDER: Record<MediaCategory, number> = {
   省部级: 3,
   地方: 4,
   行业: 5,
-  微信公众号: 6,
-  未分类: 7,
+  个人账号: 6,
+  微信公众号: 7,
+  未分类: 8,
 };
 
 export function sortByCategory(a: ClassifiedResult, b: ClassifiedResult): number {
