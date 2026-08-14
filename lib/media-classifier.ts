@@ -15,26 +15,6 @@ export interface ClassifiedResult {
   source: "news" | "wechat";
 }
 
-// ============================================================
-// 自媒体平台检测
-// 用户口径：个人发文账号不算正规外媒发稿，需要规避。
-// 通过媒体名（百家号/头条号等）或链接特征（平台域名）识别
-// ============================================================
-
-const SELF_MEDIA_NAME_RE =
-  /百家号|头条号|网易号|搜狐号|企鹅号|大鱼号|一点号|大风号|快传号|看点快报|360快传|新浪看点|趣头条|东方号|澎湃号/;
-
-const SELF_MEDIA_URL_RE =
-  /baijiahao\.baidu\.com|163\.com\/dy|sohu\.com\/a\/|toutiao\.com|ixigua\.com|yidianzixun\.com|om\.qq\.com|kuaibao\.qq\.com|k\.sina\.com\.cn|kan\.sina\.com\.cn|360kuaichuan\.com|itouchtv\.cn/;
-
-/**
- * 判断媒体名/链接是否属于个人自媒体发文平台
- * @returns true = 是自媒体平台内容，应过滤
- */
-export function isSelfMediaPlatform(media: string, url: string): boolean {
-  return SELF_MEDIA_NAME_RE.test(media) || SELF_MEDIA_URL_RE.test(url);
-}
-
 /**
  * 用数据库对结果进行分类
  * 返回已分类的结果 + 未分类的媒体列表

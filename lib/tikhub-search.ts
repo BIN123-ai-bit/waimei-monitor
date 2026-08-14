@@ -37,7 +37,9 @@ async function searchTikHub(
           keyword,
           business_type: "article",
           sort: "latest",
-          time_range: "half_year",
+          // 不限时间（接口只支持 all/day/week/half_year，没有"一年"档），
+          // 返回结果由 API 层的日期过滤按用户选择的范围把关
+          time_range: "all",
           count: Math.min(maxResults, 30),
           offset: 0,
         }),

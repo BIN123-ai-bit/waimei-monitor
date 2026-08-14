@@ -6,7 +6,6 @@ import {
   classifyWithAI,
   applyAIClassifications,
   sortByCategory,
-  isSelfMediaPlatform,
   type ClassifiedResult,
 } from "@/lib/media-classifier";
 import { deduplicate } from "@/lib/deduplicate";
@@ -317,18 +316,19 @@ async function searchOneProject(
     return inRange;
   });
 
-  // 5.5 自有媒体过滤：中建八局官方公众号等自身发布的内容不属于外媒
+  // 5.5 自有媒体过滤：八局及中建集团自身账号发布的内容不属于外媒
+  // （覆盖"中建八局西北公司""八局党建""清风八局""八局会友""中国建筑"等内部账号）
   const selfMediaFiltered = dateFiltered.filter((r) => {
-    const isSelfMedia = r.media.includes("中建八局");
+    const isSelfMedia = /八局|中建|中国建筑/.test(r.media);
     if (isSelfMedia) pushFiltered(r, "自身发布内容");
     return !isSelfMedia;
   });
 
-  // 6. 内容噪音过滤 + 自媒体平台过滤（用户口径：规避个人发文账号）
+  // 6. 内容噪音过滤
+  // （个人账号规避不再按平台一刀切：官方媒体的百家号/搜狐号等文章
+  //   是台账计入的外媒发稿，只保留 AI 判断的"个人账号"过滤，见第 10.5 步）
   const contentFiltered = selfMediaFiltered.filter((r) => {
-    const reason =
-      findNoiseReason(r.title, r.snippet) ||
-      (isSelfMediaPlatform(r.media, r.url) ? "自媒体账号" : null);
+    const reason = findNoiseReason(r.title, r.snippet);
     if (reason) pushFiltered(r, reason);
     return !reason;
   });
