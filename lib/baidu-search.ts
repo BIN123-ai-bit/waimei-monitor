@@ -109,7 +109,7 @@ async function fetchPage(url: string): Promise<string | null> {
  *
  * 日期以相对时间出现在摘要上方：如"5天前"、"1小时前"
  */
-function parseBaiduHTML(html: string): BaiduNewsResult[] {
+export function parseBaiduHTML(html: string): BaiduNewsResult[] {
   // 1. 分割成独立的结果块
   const blocks = splitIntoBlocks(html);
   if (blocks.length === 0) return [];
@@ -141,12 +141,20 @@ function parseBaiduHTML(html: string): BaiduNewsResult[] {
       }
     }
 
-    // 提取日期（从 aria-label="发布于：XXX"）
+    // 提取日期（优先 aria-label="发布于：XXX"，这是百度标注的真实发稿时间，最权威）
     const dateMatch = block.match(/aria-label="发布于：([^"]*)"/);
     let date = dateMatch ? dateMatch[1] : "";
 
-    // 如果 aria-label 没找到日期，用相对时间正则兜底
+    // 兜底：相对时间/日期只在"来源行"附近找（媒体名和发布时间紧挨着）。
+    // 绝不在整个结果块里搜——摘要里是文章内容，内容里提到的日期
+    // （如"8月10日"）不是发稿日期，会导致统计日期错误
     if (!date) {
+      const srcIdx = block.indexOf("news-source");
+      // 只取来源行自身（"news-source"标记之后的一小段）：
+      // 发布时间紧跟在媒体名后面，往前看会够到摘要里的内容日期
+      const start = srcIdx >= 0 ? srcIdx : -1;
+      const end = srcIdx >= 0 ? Math.min(block.length, srcIdx + 900) : -1;
+      const dateRegion = srcIdx >= 0 ? block.slice(start, end) : "";
       const datePatterns = [
         /(\d+)\s*天前/,
         /(\d+)\s*小时前/,
@@ -154,7 +162,7 @@ function parseBaiduHTML(html: string): BaiduNewsResult[] {
         /(\d{1,2})月(\d{1,2})日/,
       ];
       for (const pattern of datePatterns) {
-        const m = block.match(pattern);
+        const m = dateRegion.match(pattern);
         if (m) {
           date = m[0];
           break;
