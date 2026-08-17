@@ -113,6 +113,10 @@ export function isUnreliableMediaName(name: string): boolean {
   if (!/[一-龥]/.test(trimmed) && RAW_DOMAIN_RE.test(trimmed)) return true;
   // 标题混入媒体名的 Google 来源标签
   if (isTitleArtifactName(trimmed)) return true;
+  // 含数字的（"新华网呼和浩特5月1"这类电头残片）
+  if (/\d/.test(trimmed)) return true;
+  // 只有两个字的（"文化"这类栏目名残片，媒体名极少只有两个字）
+  if (trimmed.length <= 2) return true;
   // 平台名
   return PLATFORM_PREFIXES.some((p) => trimmed.startsWith(p));
 }
