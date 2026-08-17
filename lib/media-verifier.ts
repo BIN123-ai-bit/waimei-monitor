@@ -169,13 +169,15 @@ function isPlausibleMediaName(name: string, allowPlatform = false): boolean {
     .replace(/(官方)?(百家号|搜狐号|网易号|企鹅号|头条号|澎湃号|公众号|账号|帐号)$/, "")
     .trim();
 
-  if (n.length < 2 || n.length > 40) return false;
+  if (n.length < 3 || n.length > 40) return false;
   // 必须含中文（排除纯域名/英文杂名）
   if (!/[一-龥]/.test(n)) return false;
   // 含引号的是标题残片（如"新疆历史文化展”亮相…"），不是媒体名
   if (/[""“”]/.test(n)) return false;
   // 含括号/冒号/句号等标点的是正文残片（如"内蒙古日报）转自：…"），不是媒体名
   if (/[）)（(：:。；;！!？?]/.test(n)) return false;
+  // 含数字的是电头残片（如"新华网呼和浩特5月18日电"），媒体名不含数字
+  if (/\d/.test(n)) return false;
   // 页面按钮/UI 文案
   if (/查看更多|更多精彩|相关推荐|阅读原文|上一篇|下一篇|返回搜狐|扫码|关注我|点击查看/.test(n)) return false;
   if (!allowPlatform && PLATFORM_PREFIXES.some((p) => n.startsWith(p))) return false;
