@@ -67,6 +67,11 @@ interface SearchResponse {
     items: FilteredItem[];
     byReason: Record<string, number>;
   };
+  mediaVerification?: {
+    checked: number;
+    corrected: number;
+    skipped: number;
+  };
 }
 
 // ============================================================
@@ -311,6 +316,7 @@ export default function Home() {
         items: [] as FilteredItem[],
         byReason: {} as Record<string, number>,
       },
+      mediaVerification: { checked: 0, corrected: 0, skipped: 0 },
     };
 
     try {
@@ -345,6 +351,11 @@ export default function Home() {
             for (const [k, v] of Object.entries(result.filtered.byReason || {})) {
               merged.filtered.byReason[k] = (merged.filtered.byReason[k] || 0) + (v as number);
             }
+          }
+          if (result.mediaVerification) {
+            merged.mediaVerification.checked += result.mediaVerification.checked || 0;
+            merged.mediaVerification.corrected += result.mediaVerification.corrected || 0;
+            merged.mediaVerification.skipped += result.mediaVerification.skipped || 0;
           }
         } catch (chunkErr) {
           // 单组失败不中断整体，记录后继续下一组
@@ -750,6 +761,13 @@ export default function Home() {
               <span className="text-xs text-zinc-500 ml-3">
                 新闻{data.stats.bySource.news} · 微信{data.stats.bySource.wechat}
               </span>
+              {data.mediaVerification && data.mediaVerification.checked > 0 && (
+                <span className="text-xs text-emerald-600 ml-3">
+                  ✓ 已自动核对 {data.mediaVerification.checked} 条媒体名
+                  {data.mediaVerification.corrected > 0 &&
+                    `（修正 ${data.mediaVerification.corrected} 条）`}
+                </span>
+              )}
             </div>
             <div className="flex gap-2">
               <button

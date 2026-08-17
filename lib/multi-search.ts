@@ -62,6 +62,17 @@ function parseGoogleNewsRSS(xml: string, maxResults: number): NewsResult[] {
     if (lastDash > 0) {
       media = title.slice(lastDash + 3).trim();
       title = title.slice(0, lastDash).trim();
+    } else {
+      // 个别条目用 "标题_ 来源" 分隔（Google 的另一种格式）
+      const lastUnderscore = title.lastIndexOf("_ ");
+      if (lastUnderscore > 0) {
+        const suffix = title.slice(lastUnderscore + 2).trim();
+        // 分隔符后面的部分须像媒体名（无空格、含中文）才拆分，避免误伤标题里的下划线
+        if (/^[一-龥A-Za-z0-9·（）()]{2,24}$/.test(suffix) && !suffix.includes(" ")) {
+          media = suffix;
+          title = title.slice(0, lastUnderscore).trim();
+        }
+      }
     }
 
     const linkMatch = item.match(/<link>([\s\S]*?)<\/link>/i);

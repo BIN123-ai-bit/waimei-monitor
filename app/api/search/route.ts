@@ -9,6 +9,7 @@ import {
   type ClassifiedResult,
 } from "@/lib/media-classifier";
 import { deduplicate } from "@/lib/deduplicate";
+import { verifyMediaNames } from "@/lib/media-verifier";
 import { scoreReportQuality } from "@/lib/report-scorer";
 import { matchProjectKeywords, generateSearchQueries, generateLiteralVariants, buildLiteralCoOccur } from "@/data/project-keywords";
 
@@ -368,18 +369,11 @@ async function searchOneProject(
     `[项目搜索] ${projectName}: 去重=${deduplicated.length} → 评分保留=${scored.length} → 过滤记录=${filtered.length}`
   );
 
-  // 10. 媒体分类（数据库 + AI 兜底）
-  const { classified, unknownMedia } = classifyResults(scored);
-  let finalResults = classified;
-  if (unknownMedia.length > 0) {
-    const aiResults = await classifyWithAI(unknownMedia).catch(() => new Map());
-    finalResults = applyAIClassifications(classified, aiResults);
-  }
-
-  // 10.5 AI 识别为个人账号的，排除（用户口径：规避个人发文账号）
-  const personalAccounts = finalResults.filter((r) => r.category === "个人账号");
-  finalResults = finalResults.filter((r) => r.category !== "个人账号");
-  for (const r of personalAccounts) pushFiltered(r, "个人账号");
+  // 10. 媒体分类（数据库 + AI 兜底）+ 个人账号过滤
+  //     （媒体名校对后也会复用同一套把关逻辑，见 finalizeResults）
+  const finalized = await finalizeResults(scored);
+  let finalResults = finalized.kept;
+  for (const f of finalized.filtered) filtered.push(f);
 
   finalResults.sort(sortByCategory);
 
@@ -387,6 +381,77 @@ async function searchOneProject(
   await resolveGoogleNewsUrls(finalResults);
 
   return { results: finalResults, filtered, projectName, rawCount: allResults.length };
+}
+
+// ============================================================
+// 最终把关：自身发布复查 + 媒体分类（DB + AI 兜底）+ 个人账号过滤
+// 媒体名核对修正后需要重新走一遍（媒体名变了，过滤和分类结果都可能变）
+// ============================================================
+
+interface ClassifiableItem {
+  date: string;
+  title: string;
+  media: string;
+  url: string;
+  snippet: string;
+  source: "news" | "wechat";
+  project?: string;
+}
+
+async function finalizeResults(
+  items: ClassifiableItem[]
+): Promise<{
+  kept: ClassifiedResult[];
+  filtered: (FilteredItem & { project?: string })[];
+}> {
+  const filtered: (FilteredItem & { project?: string })[] = [];
+
+  // 1. 自身发布复查（八局/中建内部账号不算外媒）
+  const noSelf = items.filter((r) => {
+    const isSelfMedia = /八局|中建|中国建筑/.test(r.media);
+    if (isSelfMedia) {
+      filtered.push({
+        date: r.date,
+        title: r.title,
+        media: r.media,
+        url: r.url,
+        snippet: r.snippet,
+        source: r.source,
+        filterReason: "自身发布内容",
+        project: r.project,
+      });
+    }
+    return !isSelfMedia;
+  });
+
+  // 2. 媒体分类（数据库 + AI 兜底）
+  const { classified, unknownMedia } = classifyResults(noSelf);
+  let final = classified;
+  if (unknownMedia.length > 0) {
+    const aiResults = await classifyWithAI(unknownMedia).catch(() => new Map());
+    final = applyAIClassifications(classified, aiResults);
+  }
+
+  // 3. 个人账号过滤（用户口径：规避个人发文账号）
+  const kept: ClassifiedResult[] = [];
+  for (const r of final) {
+    if (r.category === "个人账号") {
+      filtered.push({
+        date: r.date,
+        title: r.title,
+        media: r.media,
+        url: r.url,
+        snippet: r.snippet,
+        source: r.source,
+        filterReason: "个人账号",
+        project: (r as { project?: string }).project,
+      });
+    } else {
+      kept.push(r);
+    }
+  }
+
+  return { kept, filtered };
 }
 
 // ============================================================
@@ -485,31 +550,53 @@ export async function POST(request: NextRequest) {
     allProjectResults.sort(sortByCategory);
 
     // ============================================================
-    // 4. 统计
-    // ============================================================
-    const byCategory: Record<string, number> = {};
-    let newsCount = 0;
-    let wechatCount = 0;
-
-    for (const r of allProjectResults) {
-      byCategory[r.category] = (byCategory[r.category] || 0) + 1;
-      if (r.source === "news") newsCount++;
-      else wechatCount++;
-    }
-
-    // ============================================================
-    // 5. 被过滤内容的 Google 链接也尽量还原（上限 40 个）
+    // 4. 被过滤内容的 Google 链接也尽量还原（上限 40 个）
     // ============================================================
     await resolveGoogleNewsUrls(allFiltered, 40);
 
     // ============================================================
-    // 6. URL 清洗：去掉 HTML 转义符（&amp; 等），否则链接打不开
+    // 5. URL 清洗：去掉 HTML 转义符（&amp; 等），否则链接打不开
     // ============================================================
     for (const r of allProjectResults) r.url = cleanUrlEntities(r.url);
     for (const f of allFiltered) f.url = cleanUrlEntities(f.url);
 
     // ============================================================
-    // 7. 返回
+    // 6. 媒体名校对：打开网页核实真实媒体名（微信结果已是公众号名，跳过）
+    //    平台名/原始域名 → 先查域名字典 → 翻译不了的抓网页提取真实来源
+    // ============================================================
+    const mediaVerification = await verifyMediaNames(allProjectResults, { maxPages: 40, concurrency: 6 });
+    console.log(
+      `[媒体名校对] 核对 ${mediaVerification.checked} 条，修正 ${mediaVerification.corrected} 条，跳过 ${mediaVerification.skipped} 条`
+    );
+
+    // ============================================================
+    // 7. 媒体名修正后复查：自身发布/个人账号重新过滤 + 重新分类
+    // ============================================================
+    const finalized = await finalizeResults(allProjectResults);
+    for (const f of finalized.filtered) allFiltered.push({ ...f, project: f.project || "" });
+    allProjectResults.length = 0;
+    allProjectResults.push(...finalized.kept);
+    allProjectResults.sort(sortByCategory);
+
+    // ============================================================
+    // 8. 统计（媒体名校对后重新计算）
+    // ============================================================
+    const byCategory: Record<string, number> = {};
+    let newsCount = 0;
+    let wechatCount = 0;
+    for (const r of allProjectResults) {
+      byCategory[r.category] = (byCategory[r.category] || 0) + 1;
+      if (r.source === "news") newsCount++;
+      else wechatCount++;
+    }
+    // 每个项目的最终条数（按表格归属统计，跨项目重复只算一次）
+    for (const r of allProjectResults) {
+      const proj = (r as { project?: string }).project;
+      if (proj) byProject[proj] = (byProject[proj] || 0) + 1;
+    }
+
+    // ============================================================
+    // 9. 返回
     // ============================================================
     console.log(`\n[批量搜索] 完成！共 ${allProjectResults.length} 条结果`);
     if (failed.length > 0) {
@@ -534,6 +621,7 @@ export async function POST(request: NextRequest) {
         byCategory,
         bySource: { news: newsCount, wechat: wechatCount },
       },
+      mediaVerification,
       filtered: {
         total: allFiltered.length,
         items: allFiltered.slice(0, 150),
