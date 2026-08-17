@@ -564,7 +564,7 @@ export async function POST(request: NextRequest) {
     // 6. 媒体名校对：打开网页核实真实媒体名（微信结果已是公众号名，跳过）
     //    平台名/原始域名 → 先查域名字典 → 翻译不了的抓网页提取真实来源
     // ============================================================
-    const mediaVerification = await verifyMediaNames(allProjectResults, { maxPages: 40, concurrency: 6 });
+    const mediaVerification = await verifyMediaNames(allProjectResults, { maxPages: 30, concurrency: 8 });
     console.log(
       `[媒体名校对] 核对 ${mediaVerification.checked} 条，修正 ${mediaVerification.corrected} 条，跳过 ${mediaVerification.skipped} 条`
     );

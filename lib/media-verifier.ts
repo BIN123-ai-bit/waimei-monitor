@@ -125,7 +125,7 @@ async function fetchArticlePage(url: string): Promise<string | null> {
         "Accept-Language": "zh-CN,zh;q=0.9",
         "Cache-Control": "no-cache",
       },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(4000),
       redirect: "follow",
     });
 
@@ -254,12 +254,14 @@ async function runPool<T>(
  * @param items 需要核对的结果数组（会被原地修改 media 字段）
  * @param opts.maxPages 每次最多打开多少个网页（保护请求时长）
  * @param opts.concurrency 网页抓取并发数
+ * @param opts.deadlineMs 核对环节的总时长上限（到点不再开新网页，剩余条目保留原名。
+ *                        Netlify 函数约 30 秒超时，核对必须留出预算）
  */
 export async function verifyMediaNames(
   items: MediaVerifyTarget[],
-  opts: { maxPages?: number; concurrency?: number } = {}
+  opts: { maxPages?: number; concurrency?: number; deadlineMs?: number } = {}
 ): Promise<MediaVerificationStats> {
-  const { maxPages = 40, concurrency = 6 } = opts;
+  const { maxPages = 40, concurrency = 6, deadlineMs = 8000 } = opts;
   const stats: MediaVerificationStats = { checked: 0, corrected: 0, skipped: 0 };
 
   // 第一步：域名字典（零耗时）
@@ -289,7 +291,13 @@ export async function verifyMediaNames(
   const toVerify = toFetch.slice(0, maxPages);
   stats.skipped += toFetch.length - toVerify.length;
 
+  // 总时限：到点不再开新网页，剩余条目保留原名
+  const deadline = Date.now() + deadlineMs;
   await runPool(toVerify, concurrency, async (item) => {
+    if (Date.now() > deadline) {
+      stats.skipped++;
+      return;
+    }
     stats.checked++;
     const html = await fetchArticlePage(item.url);
     if (!html) {
