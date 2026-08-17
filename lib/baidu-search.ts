@@ -12,19 +12,32 @@ export interface BaiduNewsResult {
 
 /**
  * 搜索百度新闻
+ * @param dateFrom "YYYY-MM-DD" 明确的起始日期（精准搜索，传给百度 bt 参数）
+ * @param dateTo "YYYY-MM-DD" 明确的结束日期（传给百度 et 参数，不晚于今天）
+ * 没有 dateFrom 时按 daysBack 最近 N 天
  */
 export async function searchBaiduNews(
   keyword: string,
   daysBack: number = 30,
-  maxResults: number = 30
+  maxResults: number = 30,
+  dateFrom?: string,
+  dateTo?: string
 ): Promise<BaiduNewsResult[]> {
   const encodedKeyword = encodeURIComponent(keyword);
 
-  // 时间戳计算
+  // 时间戳计算：优先用用户选择的日期区间，百度只返回区间内的新闻，
+  // 避免翻完一整年再过滤（浪费请求和时间）
   const now = new Date();
-  const et = Math.floor(now.getTime() / 1000);
-  const startDate = new Date(now.getTime() - daysBack * 86400000);
-  const bt = Math.floor(startDate.getTime() / 1000);
+  let et = Math.floor(now.getTime() / 1000);
+  let bt = Math.floor(new Date(now.getTime() - daysBack * 86400000).getTime() / 1000);
+  if (dateFrom) {
+    const fromTs = new Date(`${dateFrom}T00:00:00+08:00`).getTime();
+    if (!isNaN(fromTs)) bt = Math.floor(fromTs / 1000);
+  }
+  if (dateTo) {
+    const toTs = new Date(`${dateTo}T23:59:59+08:00`).getTime();
+    if (!isNaN(toTs)) et = Math.min(Math.floor(toTs / 1000), et);
+  }
 
   const allResults: BaiduNewsResult[] = [];
   let page = 0;

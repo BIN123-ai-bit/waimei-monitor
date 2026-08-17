@@ -250,7 +250,9 @@ async function searchOneProject(
       ? searchAllNews({
           queries: searchQueries,
           filterTerms: aliases,
-          daysBack: 365, // 放宽到一年
+          daysBack: 365, // dateFrom/dateTo 缺失时的兜底
+          dateFrom, // 精准搜索：日期区间直接传给搜索引擎
+          dateTo,
           maxPerQuery: 40,
           maxTotal: 200,
         }).catch((err) => {
@@ -259,7 +261,7 @@ async function searchOneProject(
         })
       : Promise.resolve([]),
     doWechat
-      ? searchWechatArticles(projectName, 80).catch((err) => {
+      ? searchWechatArticles(projectName, 80, dateFrom).catch((err) => {
           console.error(`[微信搜索失败] ${keyword}:`, err);
           return [];
         })
@@ -307,13 +309,13 @@ async function searchOneProject(
     });
   };
 
-  // 5. 日期过滤（只有标准 YYYY-MM-DD 格式才做范围判断，避免把最近的报道误判为范围外）
+  // 5. 日期过滤：搜索引擎已尽量只返回区间内内容（百度 bt/et、Google when:、
+  //    TikHub 时间档位），零星漏网的区间外内容直接丢弃（用户口径：区间外内容不展示）
+  //    只有标准 YYYY-MM-DD 格式才做范围判断，避免把最近的报道误判为范围外
   const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
   const dateFiltered = allResults.filter((r) => {
     if (!r.date || !ISO_DATE_RE.test(r.date)) return true; // 无法解析日期的保留
-    const inRange = r.date >= dateFrom && r.date <= dateTo;
-    if (!inRange) pushFiltered(r, "日期范围外");
-    return inRange;
+    return r.date >= dateFrom && r.date <= dateTo;
   });
 
   // 5.5 自有媒体过滤：八局及中建集团自身账号发布的内容不属于外媒
@@ -379,7 +381,8 @@ async function searchOneProject(
   // 11. 还原 Google News 跳转链接为真实网址（国内可直接打开）
   await resolveGoogleNewsUrls(finalResults, 12);
 
-  return { results: finalResults, filtered, projectName, rawCount: allResults.length };
+  // rawCount 按日期过滤后统计：区间外内容已静默丢弃，不算入"原始搜到"数
+  return { results: finalResults, filtered, projectName, rawCount: dateFiltered.length };
 }
 
 // ============================================================

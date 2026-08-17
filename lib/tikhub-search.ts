@@ -17,12 +17,29 @@ export interface WechatArticle {
 }
 
 /**
+ * 根据用户选择的起始日期挑 TikHub 时间档位
+ * 接口只支持 all/day/week/half_year（没有"一年"档），
+ * 区间早于半年前只能 all，由 API 层日期过滤把关
+ */
+function pickTimeRange(dateFrom?: string): "day" | "week" | "half_year" | "all" {
+  if (!dateFrom) return "all";
+  const fromMs = new Date(`${dateFrom}T00:00:00+08:00`).getTime();
+  if (isNaN(fromMs)) return "all";
+  const spanDays = (Date.now() - fromMs) / 86400000;
+  if (spanDays <= 1) return "day";
+  if (spanDays <= 7) return "week";
+  if (spanDays <= 180) return "half_year";
+  return "all";
+}
+
+/**
  * 通过 TikHub 微信搜一搜 API 搜索公众号文章
  */
 async function searchTikHub(
   keyword: string,
   apiKey: string,
-  maxResults: number
+  maxResults: number,
+  timeRange: "day" | "week" | "half_year" | "all"
 ): Promise<WechatArticle[]> {
   try {
     const response = await fetch(
@@ -37,9 +54,7 @@ async function searchTikHub(
           keyword,
           business_type: "article",
           sort: "latest",
-          // 不限时间（接口只支持 all/day/week/half_year，没有"一年"档），
-          // 返回结果由 API 层的日期过滤按用户选择的范围把关
-          time_range: "all",
+          time_range: timeRange,
           count: Math.min(maxResults, 30),
           offset: 0,
         }),
@@ -73,18 +88,21 @@ async function searchTikHub(
 /**
  * 主入口：双引擎搜索微信公众号文章
  * TikHub 主力 + 搜狗微信备用
+ * @param dateFrom 起始日期 YYYY-MM-DD（精准搜索：TikHub 按区间选时间档位）
  */
 export async function searchWechatArticles(
   keyword: string,
-  maxResults: number = 40
+  maxResults: number = 40,
+  dateFrom?: string
 ): Promise<WechatArticle[]> {
   const apiKey = process.env.TIKHUB_API_KEY;
 
   // 智能多路查询
   const queries = generateSearchQueries(keyword);
   const topQueries = queries.slice(0, 3); // 最多3个查询词
+  const timeRange = pickTimeRange(dateFrom);
 
-  console.log(`[微信搜索] "${keyword}" → 查询词: ${topQueries.join(", ")}`);
+  console.log(`[微信搜索] "${keyword}" → 查询词: ${topQueries.join(", ")} | 时间档位: ${timeRange}`);
 
   // ============================================================
   // 策略1：TikHub（如果有 API Key）
@@ -94,7 +112,7 @@ export async function searchWechatArticles(
   if (apiKey) {
     const perQuery = Math.ceil(maxResults / topQueries.length);
     const tikHubPromises = topQueries.map((q) =>
-      searchTikHub(q, apiKey, perQuery).catch(() => [] as WechatArticle[])
+      searchTikHub(q, apiKey, perQuery, timeRange).catch(() => [] as WechatArticle[])
     );
     const tikHubBatches = await Promise.all(tikHubPromises);
 

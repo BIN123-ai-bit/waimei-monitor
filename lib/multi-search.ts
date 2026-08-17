@@ -21,11 +21,26 @@ export interface NewsResult {
 
 async function searchGoogleNews(
   keyword: string,
-  maxResults: number
+  maxResults: number,
+  dateFrom?: string
 ): Promise<NewsResult[]> {
   try {
     const encoded = encodeURIComponent(keyword);
-    const url = `https://news.google.com/rss/search?q=${encoded}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans`;
+    // Google 只支持相对时间档位（1h/1d/7d/30d/90d/1y），没有绝对日期过滤。
+    // 按"今天距起始日"选最小覆盖档位，减少无关旧内容；
+    // 区间早于一年前时无法限制，由 API 层日期过滤把关
+    let whenParam = "";
+    if (dateFrom) {
+      const fromMs = new Date(`${dateFrom}T00:00:00+08:00`).getTime();
+      if (!isNaN(fromMs)) {
+        const spanDays = Math.max(0, (Date.now() - fromMs) / 86400000);
+        if (spanDays <= 7) whenParam = "&when:7d";
+        else if (spanDays <= 30) whenParam = "&when:30d";
+        else if (spanDays <= 90) whenParam = "&when:90d";
+        else if (spanDays <= 365) whenParam = "&when:1y";
+      }
+    }
+    const url = `https://news.google.com/rss/search?q=${encoded}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans${whenParam}`;
 
     const xml = await fetchWithRetry(url);
     if (!xml) return [];
@@ -132,11 +147,14 @@ function parsePubDate(dateStr: string): string {
 
 async function searchBaidu(
   keyword: string,
-  maxResults: number
+  maxResults: number,
+  dateFrom?: string,
+  dateTo?: string
 ): Promise<NewsResult[]> {
   try {
-    // 百度新闻时间窗口放宽到一年（原来只有 90 天，搜不到历史报道）
-    const results = await searchBaiduNews(keyword, 365, maxResults);
+    // 用户选了日期区间就把区间直接传给百度（bt/et），
+    // 百度只返回区间内的新闻，不用翻完一年再过滤
+    const results = await searchBaiduNews(keyword, 365, maxResults, dateFrom, dateTo);
     return results.map((r: BaiduNewsResult) => ({
       title: r.title,
       url: r.url,
@@ -266,8 +284,12 @@ export interface SearchOptions {
   queries: string[];
   /** 用于精度过滤的词（通常和 queries 一样） */
   filterTerms: string[];
-  /** 日期范围（向前推多少天） */
+  /** 日期范围（向前推多少天，没有 dateFrom 时的兜底） */
   daysBack?: number;
+  /** 起始日期 YYYY-MM-DD（精准搜索：传给搜索引擎） */
+  dateFrom?: string;
+  /** 结束日期 YYYY-MM-DD（精准搜索：传给搜索引擎） */
+  dateTo?: string;
   /** 每个查询最大返回结果数 */
   maxPerQuery?: number;
   /** 最终返回的最大结果数 */
@@ -279,6 +301,8 @@ export async function searchAllNews(options: SearchOptions): Promise<NewsResult[
     queries,
     filterTerms,
     daysBack = 90,
+    dateFrom,
+    dateTo,
     maxPerQuery = 15,
     maxTotal = 60,
   } = options;
@@ -297,8 +321,8 @@ export async function searchAllNews(options: SearchOptions): Promise<NewsResult[
   const queryResults = await Promise.all(
     topQueries.map(async (query) => {
       const [googleResults, baiduResults] = await Promise.all([
-        searchGoogleNews(query, maxPerQuery).catch(() => [] as NewsResult[]),
-        searchBaidu(query, maxPerQuery).catch(() => [] as NewsResult[]),
+        searchGoogleNews(query, maxPerQuery, dateFrom).catch(() => [] as NewsResult[]),
+        searchBaidu(query, maxPerQuery, dateFrom, dateTo).catch(() => [] as NewsResult[]),
       ]);
 
       const merged = mergeResults(googleResults, baiduResults);
