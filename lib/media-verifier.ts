@@ -97,6 +97,11 @@ const PLATFORM_PREFIXES = [
 const RAW_DOMAIN_RE =
   /^[a-zA-Z0-9.-]+\.(com|cn|net|org|gov\.cn|edu\.cn|com\.cn|cc|io|me)(\/.*)?$/i;
 
+/** 媒体名是否是标题混入的垃圾标签（"XX亮相内蒙古博物院_凤凰网"这类） */
+function isTitleArtifactName(name: string): boolean {
+  return name.includes("_") || /[""“”]/.test(name);
+}
+
 /** 媒体名是否不可信（需要字典翻译或抓网页核对） */
 export function isUnreliableMediaName(name: string): boolean {
   if (!name) return true;
@@ -104,6 +109,8 @@ export function isUnreliableMediaName(name: string): boolean {
   if (!trimmed || trimmed === "未知来源") return true;
   // 纯域名的名字（news.cnr.cn、CARNOC.com、qq.com）
   if (!/[一-龥]/.test(trimmed) && RAW_DOMAIN_RE.test(trimmed)) return true;
+  // 标题混入媒体名的 Google 来源标签
+  if (isTitleArtifactName(trimmed)) return true;
   // 平台名
   return PLATFORM_PREFIXES.some((p) => trimmed.startsWith(p));
 }
@@ -115,7 +122,9 @@ export function isUnreliableMediaName(name: string): boolean {
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
-async function fetchArticlePage(url: string): Promise<string | null> {
+async function fetchArticlePage(
+  url: string
+): Promise<{ html: string; finalUrl: string } | null> {
   try {
     // 完整浏览器请求头（百家号等站点会校验，缺了返回"百度安全验证"）
     const response = await fetch(url, {
@@ -138,14 +147,17 @@ async function fetchArticlePage(url: string): Promise<string | null> {
     // 安全验证页/空页直接放弃
     if (text.length < 1000) return null;
     if (/百度安全验证|安全验证|请输入验证码/.test(text.slice(0, 3000))) return null;
-    return text;
+    return { html: text, finalUrl: response.url };
   } catch {
     return null;
   }
 }
 
-/** 名称是否可信（提取到的名字必须通过校验才采用） */
-function isPlausibleMediaName(name: string): boolean {
+/** 名称是否可信（提取到的名字必须通过校验才采用）
+ *  allowPlatform=true 时允许平台名（用于原名是标题混入的垃圾标签时，
+ *  网页里的平台名也比垃圾标签好——如"XX亮相_凤凰网"这类）
+ */
+function isPlausibleMediaName(name: string, allowPlatform = false): boolean {
   const n = name
     .replace(/^(官方|来自)?(账号|帐号|媒体|来源)[：:]?/, "")
     .replace(/(官方)?(百家号|搜狐号|网易号|企鹅号|头条号|澎湃号|公众号|账号|帐号)$/, "")
@@ -154,7 +166,9 @@ function isPlausibleMediaName(name: string): boolean {
   if (n.length < 2 || n.length > 40) return false;
   // 必须含中文（排除纯域名/英文杂名）
   if (!/[一-龥]/.test(n)) return false;
-  if (PLATFORM_PREFIXES.some((p) => n.startsWith(p))) return false;
+  // 含引号的是标题残片（如"新疆历史文化展”亮相…"），不是媒体名
+  if (/[""“”]/.test(n)) return false;
+  if (!allowPlatform && PLATFORM_PREFIXES.some((p) => n.startsWith(p))) return false;
   if (/^[\d\s]+$/.test(n)) return false;
   return true;
 }
@@ -179,38 +193,56 @@ function cleanCandidate(raw: string): string {
  *   4. "来源：XXX" 标注（腾讯/新浪/网易/澎湃号等转载页通用）
  *   5. og:site_name / meta source
  *   6. <title> 末尾的 "标题_媒体名" / "标题 - 媒体名"
+ * @param allowPlatform 允许返回平台名（原名是标题混入的垃圾标签时才开）
  */
-export function extractRealMediaName(html: string): string | null {
+export function extractRealMediaName(html: string, allowPlatform = false): string | null {
   if (!html) return null;
 
   // 1. meta mediaid（搜狐号）
   let m = html.match(/<meta[^>]*name="mediaid"[^>]*content="([^"]+)"/i);
-  if (m && isPlausibleMediaName(m[1])) return cleanCandidate(m[1]);
+  if (m && isPlausibleMediaName(m[1], allowPlatform)) return cleanCandidate(m[1]);
 
   // 2. 百家号账号名标签（data-testid 或 class 里的 author-name）
   m = html.match(/<[^>]*data-testid="[^"]*author-name[^"]*"[^>]*>\s*([^<]{2,40})\s*</i);
   if (!m) m = html.match(/<[^>]*class="[^"]*author-name[^"]*"[^>]*>\s*([^<]{2,40})\s*</i);
-  if (m && isPlausibleMediaName(m[1])) return cleanCandidate(m[1]);
+  if (m && isPlausibleMediaName(m[1], allowPlatform)) return cleanCandidate(m[1]);
 
   // 3. 微信公众号昵称
   m = html.match(/var\s+nickname\s*=\s*[^"']*["']([^"']{2,40})["']/i);
   if (!m) m = html.match(/["']nickname["']\s*[:=]\s*["']([^"']{2,40})["']/i);
-  if (m && isPlausibleMediaName(m[1])) return cleanCandidate(m[1]);
+  if (m && isPlausibleMediaName(m[1], allowPlatform)) return cleanCandidate(m[1]);
 
   // 4. "来源：XXX" 标注（转载页通用）
   //    逐个尝试所有出现位置，取第一个可信的（页面里常有空标注或 JSON 转义文本）
-  const sourceRe = /来源[：:]\s*([^<>"&]{2,60})/g;
+  const sourceRe = /来源[：:]\s*/g;
   let sm;
   while ((sm = sourceRe.exec(html)) !== null) {
-    // JSON 转义序列（< 即 "<"）后面是标签，直接截断
-    const candidate = cleanCandidate(sm[1].split("\\u")[0]);
-    if (isPlausibleMediaName(candidate)) return candidate;
+    // 来源文本可能跨多个 span 拼接（腾讯新闻），先解码 JSON 转义再去除所有标签
+    const tail = html.slice(sm.index + sm[0].length, sm.index + sm[0].length + 600);
+    const decoded = tail.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) =>
+      String.fromCharCode(parseInt(h, 16))
+    );
+    let text = decoded.replace(/<[^>]*>/g, " ");
+    // 被标签截断的同一个词拼回去（"呼和浩" + "特本地宝综合整理" → 一个词）
+    text = text.replace(/([一-龥])\s+([一-龥])/g, "$1$2");
+    // 截掉"责任编辑"等跟在来源后面的标注/正文
+    const cut = text.search(
+      /(责任编辑|审核|校对|编辑|作者|责编|声明|图片|摄影|版权|记者|文\/|图\/|综合整理|整理|供稿|原标题|素材来源|\s\d)/
+    );
+    const candidate = cleanCandidate(cut >= 0 ? text.slice(0, cut) : text);
+    // 多来源行（"来源：A、B，C"）取最后一个——通常是本篇的最终来源
+    const segs = candidate
+      .split(/[、，,;；｜|]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const name = segs.length > 0 ? segs[segs.length - 1] : candidate;
+    if (isPlausibleMediaName(name, allowPlatform)) return name;
   }
 
   // 5. og:site_name / meta source
   m = html.match(/<meta[^>]*property="og:site_name"[^>]*content="([^"]+)"/i);
   if (!m) m = html.match(/<meta[^>]*name="source"[^>]*content="([^"]+)"/i);
-  if (m && isPlausibleMediaName(m[1])) return cleanCandidate(m[1]);
+  if (m && isPlausibleMediaName(m[1], allowPlatform)) return cleanCandidate(m[1]);
 
   // 6. <title> 末尾的 "标题_媒体名" / "标题 - 媒体名"
   const t = html.match(/<title>([^<]*)<\/title>/i);
@@ -220,7 +252,7 @@ export function extractRealMediaName(html: string): string | null {
       const idx = title.lastIndexOf(sep);
       if (idx > 0 && idx + sep.length < title.length) {
         const suffix = title.slice(idx + sep.length).trim();
-        if (isPlausibleMediaName(suffix)) return suffix;
+        if (isPlausibleMediaName(suffix, allowPlatform)) return suffix;
       }
     }
   }
@@ -299,12 +331,21 @@ export async function verifyMediaNames(
       return;
     }
     stats.checked++;
-    const html = await fetchArticlePage(item.url);
-    if (!html) {
+    const page = await fetchArticlePage(item.url);
+    if (!page) {
       stats.skipped++;
       return;
     }
-    const name = extractRealMediaName(html);
+    // 跟随跳转得到真实网址，顺带修正链接（Google 链接还原失败的兜底）
+    if (
+      page.finalUrl &&
+      page.finalUrl !== item.url &&
+      !page.finalUrl.includes("news.google.com")
+    ) {
+      item.url = page.finalUrl;
+    }
+    // 原名是标题垃圾标签时，允许用网页里的平台名兜底（总比垃圾标签好）
+    const name = extractRealMediaName(page.html, isTitleArtifactName(item.media));
     if (name) {
       item.media = name;
       stats.corrected++;
