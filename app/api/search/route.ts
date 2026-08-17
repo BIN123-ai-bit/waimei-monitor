@@ -163,26 +163,25 @@ async function resolveGoogleNewsUrls(
   if (toResolve.length === 0) return;
 
   let resolved = 0;
-  await runWithConcurrency(toResolve, 6, async (item) => {
+  // 并发 10 + 单链 4 秒超时 + 只跟一次跳转：
+  // 批量搜索时待还原链接多（每项目25+过滤区40），还原环节必须受控，否则吃光请求预算
+  await runWithConcurrency(toResolve, 10, async (item) => {
     const original = item.url;
 
-    // 方案1：跟随跳转还原（最多尝试 2 次）
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const res = await fetch(original, {
-          redirect: "follow",
-          signal: AbortSignal.timeout(5000),
-          headers: { "User-Agent": BROWSER_UA },
-        });
-        if (res.url && !res.url.includes("news.google.com")) {
-          item.url = res.url;
-          resolved++;
-          return;
-        }
-      } catch {
-        // 单次失败继续重试
+    // 方案1：跟随跳转还原
+    try {
+      const res = await fetch(original, {
+        redirect: "follow",
+        signal: AbortSignal.timeout(4000),
+        headers: { "User-Agent": BROWSER_UA },
+      });
+      if (res.url && !res.url.includes("news.google.com")) {
+        item.url = res.url;
+        resolved++;
+        return;
       }
-      await new Promise((r) => setTimeout(r, 500));
+    } catch {
+      // 失败继续尝试解码方案
     }
 
     // 方案2：batchexecute 接口解码（新格式链接）
@@ -378,7 +377,7 @@ async function searchOneProject(
   finalResults.sort(sortByCategory);
 
   // 11. 还原 Google News 跳转链接为真实网址（国内可直接打开）
-  await resolveGoogleNewsUrls(finalResults);
+  await resolveGoogleNewsUrls(finalResults, 12);
 
   return { results: finalResults, filtered, projectName, rawCount: allResults.length };
 }
@@ -511,6 +510,7 @@ export async function POST(request: NextRequest) {
     const failed: FailedProject[] = [];
     const seenUrls = new Set<string>();
 
+    const tSearch0 = Date.now();
     await runWithConcurrency(keywords, 3, async (kw, i) => {
       console.log(`\n[批量搜索 ${i + 1}/${keywords.length}] ${kw}`);
 
@@ -549,10 +549,13 @@ export async function POST(request: NextRequest) {
     // ============================================================
     allProjectResults.sort(sortByCategory);
 
+    const searchMs = Date.now() - tSearch0;
+
     // ============================================================
-    // 4. 被过滤内容的 Google 链接也尽量还原（上限 40 个）
+    // 4. 被过滤内容的 Google 链接也尽量还原（上限 20 个）
     // ============================================================
-    await resolveGoogleNewsUrls(allFiltered, 40);
+    const tResolve0 = Date.now();
+    await resolveGoogleNewsUrls(allFiltered, 20);
 
     // ============================================================
     // 5. URL 清洗：去掉 HTML 转义符（&amp; 等），否则链接打不开
@@ -564,6 +567,8 @@ export async function POST(request: NextRequest) {
     // 6. 媒体名校对：打开网页核实真实媒体名（微信结果已是公众号名，跳过）
     //    平台名/原始域名 → 先查域名字典 → 翻译不了的抓网页提取真实来源
     // ============================================================
+    const tVerify0 = Date.now();
+    const resolveMs = tVerify0 - tResolve0;
     const mediaVerification = await verifyMediaNames(allProjectResults, { maxPages: 30, concurrency: 8 });
     console.log(
       `[媒体名校对] 核对 ${mediaVerification.checked} 条，修正 ${mediaVerification.corrected} 条，跳过 ${mediaVerification.skipped} 条`
@@ -609,6 +614,15 @@ export async function POST(request: NextRequest) {
       byReason[f.filterReason] = (byReason[f.filterReason] || 0) + 1;
     }
 
+    // 各环节耗时（用于排查批量搜索超时问题）
+    const verifyMs = Date.now() - tVerify0;
+    const timing = {
+      searchMs,
+      resolveMs,
+      verifyMs,
+      totalMs: Date.now() - tSearch0,
+    };
+
     return NextResponse.json({
       keywords,
       dateRange: { from: dateFrom, to: dateTo },
@@ -622,6 +636,7 @@ export async function POST(request: NextRequest) {
         bySource: { news: newsCount, wechat: wechatCount },
       },
       mediaVerification,
+      timing,
       filtered: {
         total: allFiltered.length,
         items: allFiltered.slice(0, 150),
