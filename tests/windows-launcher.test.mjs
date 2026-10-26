@@ -1,14 +1,15 @@
-const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
-const fs = require('node:fs/promises');
-const http = require('node:http');
-const net = require('node:net');
-const os = require('node:os');
-const path = require('node:path');
-const { test } = require('node:test');
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
+import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-const helper = path.resolve(__dirname, '../scripts/start-windows.ps1');
-const batchLauncher = path.resolve(__dirname, '../启动.bat');
+const helper = fileURLToPath(new URL('../scripts/start-windows.ps1', import.meta.url));
+const batchLauncher = fileURLToPath(new URL('../启动.bat', import.meta.url));
 const readyMessage = '服务已就绪：http://127.0.0.1:3000';
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

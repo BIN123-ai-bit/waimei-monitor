@@ -32,7 +32,7 @@
 在 Windows 项目目录执行：
 
 ```powershell
-node --test tests/windows-launcher.test.cjs
+node --test tests/windows-launcher.test.mjs
 ```
 
 测试需要 Node.js 和 Windows PowerShell 5.1，使用真实 Windows 进程及 TCP 连接，在临时目录模拟 npm 和开发服务器，不依赖外部网络或实际 Next.js 编译。测试开始前请关闭本项目服务并确保 3000、30000 空闲；已有监听器时测试会拒绝继续，不会结束它。测试仅清理自己创建的进程。
